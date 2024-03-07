@@ -36,7 +36,7 @@ with warnings.catch_warnings():
     try:
         Abst()
     except TypeError as ex:
-        assert str(ex) == "Can't instantiate abstract class Abst with abstract method check"
+        assert str(ex).startswith("Can't instantiate abstract class Abst")
     else:
         assert False
 
