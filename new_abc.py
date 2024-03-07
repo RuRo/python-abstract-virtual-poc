@@ -128,21 +128,14 @@ def get_cache_token():
     current version of the ABC cache for virtual subclasses. The token changes
     with every call to ``register()`` on any ABC.
     """
-    return ABCMeta._abc_invalidation_counter
+    return VirtualMeta._abc_invalidation_counter
 
 
-class ABCMeta(type):
-    """Metaclass for defining Abstract Base Classes (ABCs).
+class VirtualMeta(type):
+    """Metaclass for virtual inheritance of abstract classes.
 
-    Use this metaclass to create an ABC.  An ABC can be subclassed
-    directly, and then acts as a mix-in class.  You can also register
-    unrelated concrete classes (even built-in classes) and unrelated
-    ABCs as 'virtual subclasses' -- these and their descendants will
-    be considered subclasses of the registering ABC by the built-in
-    issubclass() function, but the registering ABC won't show up in
-    their MRO (Method Resolution Order) nor will method
-    implementations defined by the registering ABC be callable (not
-    even via super()).
+    This metaclass implements only those parts of the old ABCMeta
+    API that dealt with virtual inheritance.
     """
 
     # A global counter that is incremented each time a class is
@@ -154,21 +147,14 @@ class ABCMeta(type):
 
     def __new__(mcls, name, bases, namespace, /, **kwargs):
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
-        # Compute set of abstract method names
-        abstracts = {name
-                     for name, value in namespace.items()
-                     if getattr(value, "__isabstractmethod__", False)}
-        for base in bases:
-            for name in getattr(base, "__abstractmethods__", set()):
-                value = getattr(cls, name, None)
-                if getattr(value, "__isabstractmethod__", False):
-                    abstracts.add(name)
-        cls.__abstractmethods__ = frozenset(abstracts)
+
+        # NOTE: cls.__abstractmethods__ are **NOT** set here
+
         # Set up inheritance registry
         cls._abc_registry = WeakSet()
         cls._abc_cache = WeakSet()
         cls._abc_negative_cache = WeakSet()
-        cls._abc_negative_cache_version = ABCMeta._abc_invalidation_counter
+        cls._abc_negative_cache_version = VirtualMeta._abc_invalidation_counter
         return cls
 
     def register(cls, subclass):
@@ -186,7 +172,7 @@ class ABCMeta(type):
             # This would create a cycle, which is bad for the algorithm below
             raise RuntimeError("Refusing to create an inheritance cycle")
         cls._abc_registry.add(subclass)
-        ABCMeta._abc_invalidation_counter += 1  # Invalidate negative cache
+        VirtualMeta._abc_invalidation_counter += 1  # Invalidate negative cache
         return subclass
 
     def _dump_registry(cls, file=None):
@@ -218,7 +204,7 @@ class ABCMeta(type):
         subtype = type(instance)
         if subtype is subclass:
             if (cls._abc_negative_cache_version ==
-                ABCMeta._abc_invalidation_counter and
+                VirtualMeta._abc_invalidation_counter and
                 subclass in cls._abc_negative_cache):
                 return False
             # Fall back to the subclass check.
@@ -233,10 +219,10 @@ class ABCMeta(type):
         if subclass in cls._abc_cache:
             return True
         # Check negative cache; may have to invalidate
-        if cls._abc_negative_cache_version < ABCMeta._abc_invalidation_counter:
+        if cls._abc_negative_cache_version < VirtualMeta._abc_invalidation_counter:
             # Invalidate the negative cache
             cls._abc_negative_cache = WeakSet()
-            cls._abc_negative_cache_version = ABCMeta._abc_invalidation_counter
+            cls._abc_negative_cache_version = VirtualMeta._abc_invalidation_counter
         elif subclass in cls._abc_negative_cache:
             return False
         # Check the subclass hook
@@ -267,8 +253,77 @@ class ABCMeta(type):
         return False
 
 
-class ABC(metaclass=ABCMeta):
-    """Helper class that provides a standard way to create an ABC using
-    inheritance.
+class Abstract:
+    """Base class for abstract classes.
+
+    This class implements the core parts of the old ABCMeta API,
+    excluding virtual inheritance. Inherit from this class to create
+    an Abstract class.
     """
     __slots__ = ()
+
+    def __init_subclass__(cls, *args, **kwargs):
+        super().__init_subclass__(*args, **kwargs)
+
+        name = cls.__name__
+        bases = cls.__bases__
+        namespace = cls.__dict__
+
+        # Compute set of abstract method names
+        abstracts = {name
+                     for name, value in namespace.items()
+                     if getattr(value, "__isabstractmethod__", False)}
+        for base in bases:
+            for name in getattr(base, "__abstractmethods__", set()):
+                value = getattr(cls, name, None)
+                if getattr(value, "__isabstractmethod__", False):
+                    abstracts.add(name)
+        cls.__abstractmethods__ = frozenset(abstracts)
+
+
+class Virtual(metaclass=VirtualMeta):
+    """Helper class that provides a standard way to create classes with
+    virtual inheritance support.
+    """
+    __slots__ = ()
+
+
+# === Legacy/deprecated classes ===
+
+
+class ABCMeta(VirtualMeta):
+    """Legacy metaclass for Abstract Base Classes with virtual inheritance.
+    """
+    def __new__(mcls, name, bases, namespace, /, **kwargs):
+        if Abstract not in bases:
+            bases += (Abstract,)
+        if Virtual not in bases:
+            bases += (Virtual,)
+
+        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+        return cls
+
+
+class ABC(metaclass=ABCMeta):
+    """Legacy helper class for Abstract Base Classes with virtual inheritance.
+    """
+    __slots__ = ()
+
+
+_ABCMeta = ABCMeta
+_ABC = ABC
+del ABCMeta, ABC
+deprecated_names = {"ABCMeta", "ABC"}
+
+
+def __getattr__(name):
+    if name in deprecated_names:
+        from warnings import warn
+        warn(
+            f"{name} is deprecated. You should use Abstract, "
+            "Virtual and/or VirtualMeta instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        return globals()[f"_{name}"]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
