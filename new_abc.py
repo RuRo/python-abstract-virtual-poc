@@ -297,8 +297,6 @@ class ABCMeta(VirtualMeta):
     def __new__(mcls, name, bases, namespace, /, **kwargs):
         if Abstract not in bases:
             bases += (Abstract,)
-        if Virtual not in bases:
-            bases += (Virtual,)
 
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
         return cls

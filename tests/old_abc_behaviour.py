@@ -31,7 +31,7 @@ with warnings.catch_warnings():
 
     assert type(OldAbst) == ABCMeta
     if new:
-        assert OldAbst.__mro__ == (OldAbst, ABC, Abstract, Virtual, object)
+        assert OldAbst.__mro__ == (OldAbst, ABC, Abstract, object)
         assert ABCMeta.__mro__ == (ABCMeta, VirtualMeta, type, object)
     else:
         assert OldAbst.__mro__ == (OldAbst, ABC, object)
@@ -43,7 +43,6 @@ with warnings.catch_warnings():
     if new:
         assert isinstance(OldAbst, VirtualMeta)
         assert issubclass(OldAbst, Abstract)
-        assert issubclass(OldAbst, Virtual)
 
     assert hasattr(OldAbst, "__slots__")
 
@@ -54,7 +53,7 @@ with warnings.catch_warnings():
 
     assert type(OldImpl) == ABCMeta
     if new:
-        assert OldImpl.__mro__ == (OldImpl, OldAbst, ABC, Abstract, Virtual, object)
+        assert OldImpl.__mro__ == (OldImpl, OldAbst, ABC, Abstract, object)
     else:
         assert OldImpl.__mro__ == (OldImpl, OldAbst, ABC, object)
 
@@ -64,7 +63,6 @@ with warnings.catch_warnings():
     if new:
         assert isinstance(OldImpl, VirtualMeta)
         assert issubclass(OldImpl, Abstract)
-        assert issubclass(OldImpl, Virtual)
 
     assert issubclass(OldImpl, OldAbst)
     assert hasattr(OldImpl, "__slots__")
@@ -84,7 +82,6 @@ with warnings.catch_warnings():
     if new:
         assert not isinstance(OldVirt, VirtualMeta)
         assert not issubclass(OldVirt, Abstract)
-        assert issubclass(OldVirt, Virtual)
 
     assert issubclass(OldVirt, OldAbst)
 
